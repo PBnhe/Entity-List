@@ -34,7 +34,7 @@ public:
 	int returnSize();
 	bool containsID(int id);
 	hashTable();
-
+	~hashTable();
 
 	typename std::list<entity<T>*>::iterator findListPos(int index, entity<T>* data);
 
@@ -177,7 +177,13 @@ bool hashTable<T>::containsID(int id)
 
 }
 
+template<typename T>
+hashTable<T>::~hashTable() 
+{
+	
+	delete[] Map;
 
+}
 
 
 

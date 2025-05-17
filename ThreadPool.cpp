@@ -56,9 +56,16 @@ void ThreadPool::enqueueTask(std::function<void()> task)
 
 ThreadPool::~ThreadPool() 
 {
-	for (std::thread& th : threads) 
 	{
-		if (th.joinable()) th.join();
+		std::unique_lock<std::mutex> lock(mutex);
+		running = false;
+	}
+	cv.notify_all(); 
+
+	for (std::thread& th : threads)
+	{
+		if (th.joinable())
+			th.join();
 	}
 
 
