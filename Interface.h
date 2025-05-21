@@ -6,6 +6,7 @@
 #include<functional>
 #include<unordered_map>
 #include "ThreadPool.h"
+#include"DataStream.h"
 
 
 //problemas:
@@ -29,12 +30,22 @@ struct entityConfig
 	bool autoGarbageRoutine = true;
 	size_t maxTrashBins = 2;
 	bool enableReadBuffer = true;
+	
+
 
 
 
 
 };
 
+struct serialConfig 
+{
+	std::string COM_port;
+	unsigned int CBR = 115200;
+	size_t message_size = 8;
+	DWORD accessType = GENERIC_READ | GENERIC_WRITE;
+
+};
 
 
 
@@ -68,6 +79,8 @@ private:
 	short int maxTrashBin = 0;
 
 	ThreadPool threads;
+	DataStream<T> * Dstream=nullptr;
+	
 
 	//AVISO : esses métodos são usados para  modificar todos os valores do vetor sem volta 
 	//caso deseje apenas modificar um valor ou certos valores faça questao de aplicar filtros
@@ -82,7 +95,7 @@ private:
 	void trashControlDelete();
 
 	void trashControlTransfer();
-	void firstBlockTrashControl();
+	//void firstBlockTrashControl();
 	void nBlockTrashControl();
 	void insertBlockInBuffer(ChunkList<T>* toCpy);
 	int trashArrayOrder();
@@ -140,6 +153,8 @@ public:
 	int available();//retorna elementos disponiveis para escrita de dados nos blocos atuais
 	int memUsed();//retorna referencias usadas
 	int validUsed(); //retorna as referencias validas que estao sendo usadas (used - to delete)
+	bool isEmpty();
+	void clear(); //retorna o firstin ao firstblock , modifica  used e disponivel
 
 	bool containsID(int id);//verifica se id existe na lista
 	bool toDeleteContains(int id);//verifica se o map personalizado tem tal id 
@@ -151,14 +166,18 @@ public:
 	//void insert_SIMD_Function(int f_ID, std::function<void(T)> toInsert);
 
 	void DoScalar(int id,void* extra);//realiza uma das funções escalares inseridas previamente
-	void DoScalar_semThread(int id);
+	//void DoScalar_semThread(int id);
 
 	void collapse(); //DELETA os blocos extras que não estam sendo usados 
+	
+	bool openSerial(serialConfig  config);
+	bool readSerial(entity<T>* ToReceive, bool copyToList);//traduz a mensagem do stream de dados para um entity<T> com id e dados , e pode já inserir na lista
+	bool readSerial(void* pointer);//pode ser utilizado para retornar mensagens não entity<T> do serial
+	void setSerialMessageSize(size_t size);
+	size_t getSerialMessageSize();
 
 
-
-
-};
+};															
 
 /*template<typename T>
 void Interface<T>::giveTrashVal(std::function<bool(entity<T>*)> func)
@@ -726,7 +745,7 @@ T Interface<T>::returnDataByID(int id)
 		current = current->Next;
 		debg = i;
 	}
-	std::cout << "DEBUG INT:" << debg << std::endl;
+	
 
 	if (n_array != 0)
 	{
@@ -1485,4 +1504,91 @@ Interface<T>::~Interface() {
 
 
 }
+
+template<typename T>
+bool Interface<T>::isEmpty()
+{
+	return(used == 0);
+}
+
+template<typename T>
+void Interface<T>::clear() 
+{
+	FirstIn = firstBlock;
+	firstInIndex = 0;
+	availableMemory += used;
+	used = 0;
+	toDeleteCount = 0;
+	deletano->clear();
+	readBuffer.clear();
+
+
+}
+
+template<typename T>
+bool Interface<T>::openSerial(serialConfig  config) 
+{
+	Dstream = new DataStream<T>();
+	if (!Dstream->open(config.COM_port, config.accessType, config.CBR)) {
+		std::cerr << "FALHA EM ABRIR SERIAL" << std::endl;
+		return false;
+	}
+	return true;
+}
+
+template<typename T>
+bool Interface<T>::readSerial(entity<T>* toReceive, bool copyToList) 
+{
+
+	unsigned int size = Dstream->getMessageSize();
+	if (size != sizeof(entity<T>)) 
+	{
+		std::cerr << "BUFFER DE LEITURA INCOMPATIVEL COM TIPO , USE SOBRECARGA PARA GENERICOS OU MUDE O TAMANHO DO BUFFER UTILIZANDO SETSERIALMESSAGESIZE" << std::endl;
+		return false;
+	}
+	//buffer criado para receber mensagem
+	if (!Dstream->read(toReceive))
+	{
+		std::cerr << "FALHA NA LEITURA DO SERIAL || TAMANHO DA MENSAGEM:" << size << std::endl;
+		std::cerr << "WINDOWS LASTERROR: " << GetLastError() << std::endl;
+		return false;
+	}
+	
+	if (copyToList)
+	{
+		insertData(toReceive->id, toReceive->data);
+	}
+
+	return true;
+
+}
+
+template<typename T>
+bool Interface<T>::readSerial(void* pointer) 
+{//coloca no pointer uma copia do buffer , usado para mensagens aleatórias
+	size_t size = Dstream->getMessageSize();
+	if (!Dstream->read(buffer, size)) 
+	{
+		std::cerr << "FALHA NA LEITURA DO SERIAL || TAMANHO DA MENSAGEM:" << size << std::endl;
+		std::cerr << "WINDOWS LASTERROR: " << GetLastError() << std::endl;
+		return false;
+
+	}
+	memcpy(pointer, buffer, size);
+
+}
+
+template<typename T>
+void Interface<T>::setSerialMessageSize(size_t size) 
+{
+	Dstream->setMessageSize(size);
+}
+
+template<typename T>
+size_t Interface<T>::getSerialMessageSize() 
+{
+	return (Dstream->getMessageSize());
+}
+
+
 #endif // !

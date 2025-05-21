@@ -8,7 +8,7 @@
 #include <cstdlib>
 #include <new>
 
-
+#pragma pack(push, 1)
 template<typename T>
 class entity 
 {
@@ -16,6 +16,7 @@ public:
 	int id;
 	T data;
 };
+#pragma pack(pop)
 
 
 template<typename T>

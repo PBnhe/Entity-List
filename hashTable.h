@@ -33,6 +33,7 @@ public:
 	entity<T>* returnTrashAddress(entity<T>* basePointer,entity<T>* endPointer); //retorna endereço que nao esta em intervalo
 	int returnSize();
 	bool containsID(int id);
+	void clear();
 	hashTable();
 	~hashTable();
 
@@ -185,7 +186,13 @@ hashTable<T>::~hashTable()
 
 }
 
-
+template<typename T>
+void hashTable<T>::clear() {
+	for (int i = 0; i < ChunkList<T>::N; i++) 
+	{
+		Map[i].clear();
+	}
+}
 
 
 
