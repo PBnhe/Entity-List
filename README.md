@@ -14,7 +14,6 @@ via serial with external components, microcontrollers for example.
 This list has a lazy deletion system, only marking the items for deletion to later reorder the data inside the blocks, forming a block entirely composed of trash to be relocated.
 therefore, it is essential to be careful with direct references to data and with handling the trash in the structure.
 
-🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
-Este projeto está em desenvolvimento
-This project is under development
-🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧🚧
+🚧
+Este projeto está em desenvolvimento ||||| This project is under development
+🚧
