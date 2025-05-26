@@ -7,6 +7,12 @@
 using namespace std;
 using namespace std::chrono;
 
+struct onOFFsensor {
+	uint8_t opcode;
+	bool boolean;
+	uint8_t checksum;
+
+};
 
 struct safevec 
 {
@@ -65,6 +71,17 @@ void heavyIntOp(int & value,int &id,entity<int> * ref,void* extra)
 	*/
    
 }
+void MessageToList(uint8_t OPCODE, std::byte* PAYLOAD, uint8_t checkSum, void* any) 
+{
+Interface<float>* entitylist = reinterpret_cast<Interface<float>*> (any);
+int id;
+int data;
+memcpy(&id, PAYLOAD, 4);
+memcpy(&data, PAYLOAD + 4, 4);
+entitylist->insertData(id, data);
+
+}
+
 
 int main() 
 {
@@ -78,7 +95,7 @@ int main()
 	system("Pause");*/
 
 	ThreadPool Fpool;
-
+	DataStream dstream;
 	entityConfig config;
 	config.autoGarbageRoutine = true;
 	config.chunkSize = 26;
@@ -89,27 +106,27 @@ int main()
 	serialConfig configserial;
 	configserial.accessType = GENERIC_READ | GENERIC_WRITE;
 	configserial.CBR = CBR_115200;
-	configserial.COM_port = "COM4";
-	configserial.message_size = sizeof(entity<float>);
-
+	configserial.COM_port = "COM6";
+	dstream.open(configserial.COM_port, GENERIC_READ | GENERIC_WRITE);
+	
 	Interface<float>* entitylist=nullptr;
 	entitylist = new Interface<float>();
-	entitylist->openSerial(configserial);
+	uint8_t op = 0x04;
+	dstream.MapOPCODE(op, 8, MessageToList, entitylist);
+
+	
 	entitylist->insertScalarFunction(1, readTemperature);
 	
 	entitylist->initialize(config);
 	
 	entitylist->dataD();
-	entitylist->setSerialMessageSize(sizeof(entity<float>));
+	
 	
 	
 	entity<float>* entidade = nullptr;
 	entidade = new entity<float>;
 	cout << "ENTIDADE CRIADA" << endl;
-	if (!entitylist->readSerial(entidade, false)) 
-	{
-		std::cerr << "ERRO EM READ SERIAL " << endl;
-	}
+	
 	cout << "Pass" << endl;
 	  
 	entitylist->insertData(entidade->id, entidade->data);
@@ -125,24 +142,7 @@ int main()
 	cout << "COLETANDO DADOS" << endl;
 	auto start = high_resolution_clock::now();
 	auto end = high_resolution_clock::now();
-	while (duration_cast<milliseconds>(end - start).count()<10000)
-	{
-		if (!entitylist->readSerial(entidade,1))
-		{
-			cout << "BAD READ" << endl;
-			start = high_resolution_clock::now();
-			continue;
-		}
-		entidade = reinterpret_cast<entity<float>*>(buffer);
-		entitylist->insertData(entidade->id, entidade->data);
-
-		//cout << "ID: " << entidade->id << endl;
-		//cout << "DATA: " << entidade->data << endl;
-		//cout << "TEMPERATURA: " << readTemperature(entidade->data)<<endl;
-		//cout << "-----------------------------------------------------------------------" << endl;
-
-		end = high_resolution_clock::now();
-	}
+	
 
 	//entitylist->DoScalar(1, 0);
 
@@ -155,6 +155,7 @@ int main()
 		cout << "2:: LIMPAR DADOS" << endl;
 		cout << "3:: APLCICAR METODO" << endl;
 		cout << "4:: DADOS DA LISTA" << endl;
+		cout << "5:: CONTROLAR SENSOR" << endl;
 		cin >> cas0;
 		switch (cas0)
 		{
@@ -174,10 +175,11 @@ int main()
 		}
 		case 3: 
 		{
-			int id = 0;
+			cin.clear();
+			int ide = 0;
 			cout << "INSIRA ID DO METODO" << endl;
-			cin >> id;
-			entitylist->DoScalar(1, 0);
+			cin >> ide;
+			entitylist->DoScalar(ide, 0);
 			break;
 		}
 		case 4: 
@@ -188,10 +190,21 @@ int main()
 			break;
 
 		}
+		case 5: 
+		{
+			int dec;
+			cout << "INSIRA 1 PARA ATIVAR E 0 PARA DESATIVAR" << endl;
+			cin >> dec;
+			package<bool> message;
+			message.OPCODE = 0x05;
+			message.payload = dec;
+			message.checksum = dstream.generateCheksum(message.OPCODE, reinterpret_cast<uint8_t*>(&message.payload), sizeof(bool));
+			dstream.write(&message, sizeof(onOFFsensor));
+		}
 		
 		}
-
-
+		dstream.messageTreatment();
+		
 
 
 

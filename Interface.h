@@ -79,7 +79,7 @@ private:
 	short int maxTrashBin = 0;
 
 	ThreadPool threads;
-	DataStream<T> * Dstream=nullptr;
+	//DataStream<T> * Dstream=nullptr;
 	
 
 	//AVISO : esses métodos são usados para  modificar todos os valores do vetor sem volta 
@@ -170,12 +170,13 @@ public:
 
 	void collapse(); //DELETA os blocos extras que não estam sendo usados 
 	
+	/*
 	bool openSerial(serialConfig  config);
 	bool readSerial(entity<T>* ToReceive, bool copyToList);//traduz a mensagem do stream de dados para um entity<T> com id e dados , e pode já inserir na lista
 	bool readSerial(void* pointer);//pode ser utilizado para retornar mensagens não entity<T> do serial
 	void setSerialMessageSize(size_t size);
 	size_t getSerialMessageSize();
-
+	*/
 
 };															
 
@@ -1525,6 +1526,8 @@ void Interface<T>::clear()
 
 }
 
+
+/*
 template<typename T>
 bool Interface<T>::openSerial(serialConfig  config) 
 {
@@ -1590,5 +1593,5 @@ size_t Interface<T>::getSerialMessageSize()
 	return (Dstream->getMessageSize());
 }
 
-
+*/
 #endif // !
