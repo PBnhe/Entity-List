@@ -3,6 +3,7 @@
 #include "Interface.h"
 #include"ThreadPool.h"
 #include "DataStream.h"
+#include"Filestream.h"
 
 using namespace std;
 using namespace std::chrono;
@@ -75,9 +76,11 @@ void MessageToList(uint8_t OPCODE, std::byte* PAYLOAD, uint8_t checkSum, void* a
 {
 Interface<float>* entitylist = reinterpret_cast<Interface<float>*> (any);
 int id;
-int data;
+float data;
 memcpy(&id, PAYLOAD, 4);
 memcpy(&data, PAYLOAD + 4, 4);
+//std::cerr << "ID: " << id<<std::endl;
+//std::cerr << "DADOS: " << data<<std::endl;
 entitylist->insertData(id, data);
 
 }
@@ -85,34 +88,24 @@ entitylist->insertData(id, data);
 
 int main() 
 {
-	int a;
 	
-	std::byte buffer[8];
-	/*
-	DataStream<float> istream;
-	std::string str = "COM4";
-	istream.open(str, GENERIC_READ);
-	system("Pause");*/
-
-	ThreadPool Fpool;
 	DataStream dstream;
 	entityConfig config;
 	config.autoGarbageRoutine = true;
 	config.chunkSize = 26;
-	config.enableReadBuffer = true;
 	config.maxTrashBins = 3;
 	config.size = 100000;
 
-	serialConfig configserial;
-	configserial.accessType = GENERIC_READ | GENERIC_WRITE;
-	configserial.CBR = CBR_115200;
-	configserial.COM_port = "COM6";
-	dstream.open(configserial.COM_port, GENERIC_READ | GENERIC_WRITE);
+	
+	dstream.open("COM6", GENERIC_READ | GENERIC_WRITE,1000000);
 	
 	Interface<float>* entitylist=nullptr;
 	entitylist = new Interface<float>();
 	uint8_t op = 0x04;
 	dstream.MapOPCODE(op, 8, MessageToList, entitylist);
+
+	
+
 
 	
 	entitylist->insertScalarFunction(1, readTemperature);
@@ -129,22 +122,11 @@ int main()
 	
 	cout << "Pass" << endl;
 	  
-	entitylist->insertData(entidade->id, entidade->data);
+	
 	//entitylist->insertScalarFunction(1, heavyIntOp);
 	cout << "APERTE QUALQUER TECLA PARA CONTINUAR" << endl;
 	system("Pause");
-
-	cout << "ID: " << entidade->id << endl;
-	cout << "DATA: " << entidade->data << endl;
-	
-	
-	
-	cout << "COLETANDO DADOS" << endl;
-	auto start = high_resolution_clock::now();
-	auto end = high_resolution_clock::now();
-	
-
-	//entitylist->DoScalar(1, 0);
+	entitylist->createInOutFiles("Inpute", "Ortepute");
 
 	cout << "pronto :(" << endl;
 	while (true) 
@@ -153,9 +135,13 @@ int main()
 		cout << "INISRA OPCAO: " << endl;
 		cout << "1:: BUSCAR ID" << endl;
 		cout << "2:: LIMPAR DADOS" << endl;
-		cout << "3:: APLCICAR METODO" << endl;
+		cout << "3:: APLICAR METODO" << endl;
 		cout << "4:: DADOS DA LISTA" << endl;
 		cout << "5:: CONTROLAR SENSOR" << endl;
+		cout << "6::COLETA DADOS POR 20 SEGUNDOS" << std::endl;
+		cout << "7::LIMPAR CONTADOR DE ID DA PLACA" << std::endl;
+		cout << "8:: ESCREVA" << std::endl;
+		cout << "9::LEIA INPUTFILE " << std::endl;
 		cin >> cas0;
 		switch (cas0)
 		{
@@ -200,10 +186,63 @@ int main()
 			message.payload = dec;
 			message.checksum = dstream.generateCheksum(message.OPCODE, reinterpret_cast<uint8_t*>(&message.payload), sizeof(bool));
 			dstream.write(&message, sizeof(onOFFsensor));
+			break;
+		}
+		case 6: 
+		{
+			package<bool> message;
+			message.OPCODE = 0x05;
+			message.payload = true;
+			message.checksum = dstream.generateCheksum(message.OPCODE, reinterpret_cast<uint8_t*>(&message.payload), sizeof(bool));
+			dstream.write(&message, sizeof(onOFFsensor));
+			auto start = high_resolution_clock::now();
+			auto end = high_resolution_clock::now();
+			while (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() < 20000.0f) 
+			{
+				dstream.messageTreatment();
+				end = high_resolution_clock::now();
+			}
+			//package<bool> message;
+			message.OPCODE = 0x05;
+			message.payload = false;
+			message.checksum = dstream.generateCheksum(message.OPCODE, reinterpret_cast<uint8_t*>(&message.payload), sizeof(bool));
+			dstream.write(&message, sizeof(onOFFsensor));
+			break;
+		}
+		case 7: 
+		{
+			package<uint8_t> message;
+			message.OPCODE = 0x07;
+			message.payload = false;
+			message.checksum = dstream.generateCheksum(message.OPCODE, reinterpret_cast<uint8_t*>(&message.payload), sizeof(bool));
+			dstream.write(&message, sizeof(package<uint8_t>));
+			std::cout << "LIMPO" << std::endl;
+			break;
+		}
+		case 8: 
+		{
+			cout << "Case 8" << endl;
+			entitylist->WriteInOutputFile();
+			cout << "Scrito" << endl;
+			entitylist->commitInOutFile("Teste");
+			break;
+		}
+
+		case 9: 
+		{
+			cout << "Case 9" << endl;
+			entitylist->ReadFromInputFile();
+			break;
+
+		}
+
 		}
 		
-		}
-		dstream.messageTreatment();
+
+		system("Pause");
+		system("cls");
+		
+		//dstream.messageTreatment();
 		
 
 

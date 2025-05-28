@@ -7,18 +7,10 @@
 #include<unordered_map>
 #include "ThreadPool.h"
 #include"DataStream.h"
+#include "Filestream.h"
 
 
-//problemas:
-//deleção
-//inserção
-//leak de elementos vazios em arrays
-//ToDO:
-//abstrair GC pra um objeto
-//criar ponteiro de acesso recente para usar nos métodos contains() e returnById
-//^- reduz buscas na lista sem inserir nada no cache de leitura
-//introduzir uma método genérico responsável por realizar operações de SIMD 
-//trabalhar com entrada e saida de memória
+
 
 enum { INITIALIZED, AUTOGARBAGE, READBUFFER };
 
@@ -29,22 +21,6 @@ struct entityConfig
 	size_t chunkSize = 16;
 	bool autoGarbageRoutine = true;
 	size_t maxTrashBins = 2;
-	bool enableReadBuffer = true;
-	
-
-
-
-
-
-};
-
-struct serialConfig 
-{
-	std::string COM_port;
-	unsigned int CBR = 115200;
-	size_t message_size = 8;
-	DWORD accessType = GENERIC_READ | GENERIC_WRITE;
-
 };
 
 
@@ -58,7 +34,7 @@ private:
 
 	ChunkList<T>* trashArray = nullptr;// array de lixo  que pode ser restaurado
 
-	ChunkList<T>* lastBlock = nullptr;  //autoexplicativo :(
+	ChunkList<T>* lastBlock = nullptr;  //autoexplicativo
 	ChunkList<T>* FirstIn = nullptr;  //para alocação rápida
 	ChunkList<T>* recentAcess = nullptr; //um bloco de acesso recente, difere do buffer de leitura recente
 
@@ -77,16 +53,18 @@ private:
 	bool hasExtraVal = false;
 	short int trashBinCount = 0;
 	short int maxTrashBin = 0;
+	bool binOverflow = false;
 
 	ThreadPool threads;
+	FileStream* filestream = nullptr;
 	//DataStream<T> * Dstream=nullptr;
 	
 
-	//AVISO : esses métodos são usados para  modificar todos os valores do vetor sem volta 
+	// esses métodos são usados para  modificar todos os valores do vetor sem volta 
 	//caso deseje apenas modificar um valor ou certos valores faça questao de aplicar filtros
-	//ou utilize outros métodos  de escrita por ID para tal(reWriteByID) , CUIDADO!!!!
+	//ou utilize outros métodos  de escrita por ID para tal(reWriteByID) 
 	std::unordered_map<int, std::function<void(T&,int&,entity<T>*,void*)>> ScalarFunctions;
-	//std::unordered_map<int, std::function<void(T&)>> SIMDFunctions;
+	
 
 	void FirstBlockAlloc(T data, int id); // escreve data no index do bloco firstblock
 	void AllocNewAndInsert(T data, int id); //aloca novo bloco de memoria e escreve data
@@ -125,7 +103,7 @@ public:
 			maxTrashBin = config.maxTrashBins;
 			FLAGS[INITIALIZED] = true;
 			FLAGS[AUTOGARBAGE] = config.autoGarbageRoutine;
-			FLAGS[READBUFFER] = config.enableReadBuffer;
+			
 		}
 
 	}
@@ -135,14 +113,14 @@ public:
 	void ShowDataDebug() { firstBlock->ShowDataDebug(); }
 
 	void insertData(int id, T data);//associa dados a um id na lista de entidades
-	void removeDataIndex(int n);  //método existe apenas para debug
-	void removeDataWhere(T data); //método existe apenas para debug
+	void removeDataIndex(int n);  //remove no numero n
+	void removeDataWhere(T data); //remove onde data==data
 	void trashControl(); // remanejo de lixo
 	void dataD(); //método existe apenas para debug
-	//void giveTrashVal(std::function<bool(entity<T>*)> func);
+	
 	entity<T> returnCopyByIndex(int index);//debug
 
-	//MÉTODOS DE USUÁRIO--------------------------------------------------------------------
+	
 	T returnDataByID(int id);
 	T retunrDataByID_Thread(int id);
 	void removeDataByID(int id);
@@ -160,7 +138,8 @@ public:
 	bool toDeleteContains(int id);//verifica se o map personalizado tem tal id 
 	bool trashBinContains(int id);//verifica se a lixeira tem tal id
 
-	void restoreID(int id);//restuara id de lista de lixo /lixeira
+	void restoreID(int id);//restuara id de lista de lixo
+	void restoreBin(int bins);//restaura quantidade de lixeieras especificada
 	void reWriteID(const int id, T data);//reescreve conteudo de id
 	void insertScalarFunction(int f_ID, std::function<void(T&, int&, entity<T>*,void*)> toInsert);
 	//void insert_SIMD_Function(int f_ID, std::function<void(T)> toInsert);
@@ -169,23 +148,15 @@ public:
 	//void DoScalar_semThread(int id);
 
 	void collapse(); //DELETA os blocos extras que não estam sendo usados 
-	
-	/*
-	bool openSerial(serialConfig  config);
-	bool readSerial(entity<T>* ToReceive, bool copyToList);//traduz a mensagem do stream de dados para um entity<T> com id e dados , e pode já inserir na lista
-	bool readSerial(void* pointer);//pode ser utilizado para retornar mensagens não entity<T> do serial
-	void setSerialMessageSize(size_t size);
-	size_t getSerialMessageSize();
-	*/
+	void createInOutFiles(std::string InPutFile, std::string outputFile);
+	void ReadFromInputFile();//le tudo de um arquivo e joga na lista
+	void WriteInOutputFile();//joga a lista inteira num arquivo
+	void commitInOutFile(std::string newInputFile);
 
+
+	
 };															
 
-/*template<typename T>
-void Interface<T>::giveTrashVal(std::function<bool(entity<T>*)> func)
-{
-	reValidateTrash = func;
-	hasExtraVal = true;
-}*/
 
 
 template<typename T>
@@ -288,7 +259,7 @@ void Interface<T>::insertData(int id, T data)
 		return;
 	}
 
-	//já que não nos restam alternativas , só sobra ao betinha alocar um novo chunk :(
+	
 	//sendo assim vamos atualizar a memória disponivel , essa que deve estar estritamente ZERADA para chegar aqui
 
 	AllocNewAndInsert(data, id);
@@ -319,6 +290,10 @@ void Interface<T>::FirstBlockAlloc(T data, int id)
 
 	FirstIn->Data[firstInIndex].data = data;
 	FirstIn->Data[firstInIndex].id = id;
+	if (id < 0) 
+	{
+		removeDataIn(&FirstIn->Data[firstInIndex]);
+	}
 
 
 	firstInIndex++;
@@ -336,9 +311,9 @@ void Interface<T>::AllocNewAndInsert(T data, int id)
 	temp->Data = new entity<T>[ChunkList<T>::N];
 
 
-	if (FirstIn == lastBlock) {
+	/*if (FirstIn == lastBlock) {
 		std::cout << "true";
-	}
+	}*/
 
 	temp->Next = nullptr;
 	lastBlock->Next = temp;
@@ -364,9 +339,9 @@ void Interface<T>::dataD()
 	std::cout << availableMemory << std::endl;
 	std::cout << "TO DELETE COUNT:" << std::endl;
 	std::cout << toDeleteCount << std::endl;
-	std::cout << "VENDO SE REESCREVEU A MEMORIA MSM" << std::endl;
+	
 	//	std::cout << firstBlock->Data[0] << std::endl;
-	std::cout << " TAMANHO DO HASH MAP TO DELETE" << std::endl;
+	std::cout << " ELEMENTOS EM HASH TO DELETE" << std::endl;
 	std::cout << deletano->returnSize() << std::endl;
 	std::cout << "TAMANHO N " << std::endl;
 	std::cout << ChunkList<T>::N << std::endl;
@@ -434,7 +409,7 @@ void Interface<T>::trashControl()
 		{
 			trashControl();
 		}
-
+		
 		return;
 	}
 
@@ -535,18 +510,8 @@ void Interface<T>::trashControlDelete()
 		} //remanejar , mas só por segurança
 
 	}
-	//agora o vetor data de current está completo de dados lixo podemos aplicar uma unica verificação sob cada um dos current
-	//se o método a ser definido retornar verdadeiro , o dado será inserido na ponta
+	
 
-	if (hasExtraVal)
-	{
-		for (int i = 0; i < ChunkList<T>::N; i++)
-		{
-			if (reValidateTrash(current->Data[i])) {
-				insertData(current->Data[i].id, current->Data[i].data);
-			}
-		}
-	}
 	//aqui temos um bloco completamente validado, agora vamos inserir esses blocos em um dos buffers de lixo
 
 
@@ -570,74 +535,13 @@ template<typename T>
 void Interface<T>::trashControlTransfer()
 {
 	
-	//o bloco a ser remanejado não é o primeiro bloco da lista
+	
 	nBlockTrashControl();
 	return;
 
 }
 
-/*template<typename T>
-void Interface<T>::firstBlockTrashControl()
-{
-	
-	ChunkList<T>* current = firstBlock;
-	for (int i = 0; i < ChunkList<T>::N; i++)
-	{
 
-		//ver se ref nao é lixo
-		if (deletano->ifHasRemove(&current->Data[i]))
-		{
-			continue; //se tem endereço , delete e pule a proxima iteração //para evitat encadeamentos de if else
-		}
-		//tenta encontrar endereço válido para copiar dados
-
-		entity<T>* target = deletano->returnTrashAddress(current->Data, current->Data + ChunkList<T>::N);
-		if (target)
-		{
-			entity<T> temp = *target; //temp recebe conteudo de target
-			*target = current->Data[i]; // conteudo de target recebe dados
-			current->Data[i] = temp; //conteudo reescrito por lixo
-
-		}
-		if (!target) {
-			insertData(current->Data[i].id, current->Data[i].data); //seguindo a lógica do programa para remanejar lixo deve existir um bloco completo de lixos para
-		} //remanejar , mas só por segurança
-
-	}
-	//agora o vetor data de current está completo de dados lixo podemos aplicar uma unica verificação sob cada um dos current
-	//se o método a ser definido retornar verdadeiro , o dado será inserido na ponta
-
-	if (hasExtraVal)
-	{
-		for (int i = 0; i < ChunkList<T>::N; i++)
-		{
-			if (reValidateTrash(current->Data[i])) {
-				insertData(current->Data[i].id, current->Data[i].data);
-			}
-		}
-	}
-	//aqui temos um bloco completamente validado, agora vamos inserir esses blocos em um dos buffers de lixo
-
-	if (trashBinCount == 1)
-		trashBinCount = 0;
-
-	std::memcpy(trashArray[trashArrayOrder()].Data, current->Data, sizeof(entity<T>) * ChunkList<T>::N);
-	trashBinCount++;
-	//a diferença desse método é que jogamos o bloco atual para o final da lista
-	//aumentamos a memoria disponivel já que há um bloco a ser reescrito
-	firstBlock = current->Next;
-	current->Next = nullptr;
-	//o primeiro bloco agora é o segundo
-	//current agora está solto sem algo que o referencie 
-	//então vamos colocar current no final da lista
-	lastBlock->Next = current;
-	lastBlock = current;
-	used -= ChunkList<T>::N;
-	availableMemory += ChunkList<T>::N;
-	toDeleteCount -= ChunkList<T>::N;
-	return;
-}
-*/
 
 template<typename T>
 void Interface<T>::nBlockTrashControl()
@@ -671,29 +575,14 @@ void Interface<T>::nBlockTrashControl()
 		} //remanejar , mas só por segurança
 
 	}
-	//agora o vetor data de current está completo de dados lixo podemos aplicar uma unica verificação sob cada um dos current
-	//se o método a ser definido retornar verdadeiro , o dado será inserido na ponta
-
-	if (hasExtraVal)
-	{
-		for (int i = 0; i < ChunkList<T>::N; i++)
-		{
-			if (reValidateTrash(current->Data[i])) {
-				insertData(current->Data[i].id, current->Data[i].data);
-			}
-		}
-	}
+	
 	//aqui temos um bloco completamente validado, agora vamos inserir esses blocos em um dos buffers de lixo
 
-	//if (trashBinCount == 1)
-		//trashBinCount = 0;
+	
 
 	std::memcpy(trashArray[trashArrayOrder()].Data, current->Data, sizeof(entity<T>) * ChunkList<T>::N);
 	trashBinCount++;
-	//a diferença desse método para o outro é que firstblock continua sendo ele mesmo
-
-
-	//connector->Next = current->Next;//current solto em mem
+	
 	firstBlock = current->Next;
 	lastBlock->Next = current;
 	lastBlock = current;
@@ -954,12 +843,16 @@ bool Interface<T>::trashBinContains(int id)
 template<typename T>
 int Interface<T>::trashArrayOrder()
 {
-
+	
 	if (trashBinCount >= maxTrashBin)
 	{
 		trashBinCount = 0;
+		binOverflow = true;
+
 	}
+	
 	return trashBinCount;
+
 }
 
 template <typename T>
@@ -970,7 +863,7 @@ void Interface<T>::restoreID(int id)
 	}
 	//se a referencia está no hash então ela ainda está na lista , apenas indicamos que esse endereço é valid
 
-	for (int i = 0; i < trashBinCount; i++)
+	/*for (int i = 0; i < trashBinCount; i++)
 	{
 		for (int j = 0; j < ChunkList<T>::N; j++)
 		{
@@ -979,7 +872,7 @@ void Interface<T>::restoreID(int id)
 				insertData(trashArray[i].Data[j].id, trashArray[i].Data[j].data);
 			}
 		}
-	}
+	}*/
 
 }
 
@@ -1502,7 +1395,7 @@ Interface<T>::~Interface() {
 		delete[] firstBlock->Data;
 		delete firstBlock;
 	}
-
+	delete filestream;
 
 }
 
@@ -1526,72 +1419,98 @@ void Interface<T>::clear()
 
 }
 
-
-/*
 template<typename T>
-bool Interface<T>::openSerial(serialConfig  config) 
+void Interface<T>::createInOutFiles(std::string InputFile, std::string outputFile) 
 {
-	Dstream = new DataStream<T>();
-	if (!Dstream->open(config.COM_port, config.accessType, config.CBR)) {
-		std::cerr << "FALHA EM ABRIR SERIAL" << std::endl;
-		return false;
-	}
-	return true;
+	filestream = new FileStream(InputFile, outputFile);
 }
 
 template<typename T>
-bool Interface<T>::readSerial(entity<T>* toReceive, bool copyToList) 
+void Interface<T>::ReadFromInputFile() 
 {
-
-	unsigned int size = Dstream->getMessageSize();
-	if (size != sizeof(entity<T>)) 
-	{
-		std::cerr << "BUFFER DE LEITURA INCOMPATIVEL COM TIPO , USE SOBRECARGA PARA GENERICOS OU MUDE O TAMANHO DO BUFFER UTILIZANDO SETSERIALMESSAGESIZE" << std::endl;
-		return false;
-	}
-	//buffer criado para receber mensagem
-	if (!Dstream->read(toReceive))
-	{
-		std::cerr << "FALHA NA LEITURA DO SERIAL || TAMANHO DA MENSAGEM:" << size << std::endl;
-		std::cerr << "WINDOWS LASTERROR: " << GetLastError() << std::endl;
-		return false;
-	}
 	
-	if (copyToList)
+	entity<T> target;
+	while (filestream->ReadFromFile((char*)&target, sizeof(entity<T>))) 
 	{
-		insertData(toReceive->id, toReceive->data);
+		insertData(target.id, target.data);
 	}
 
-	return true;
-
 }
 
 template<typename T>
-bool Interface<T>::readSerial(void* pointer) 
-{//coloca no pointer uma copia do buffer , usado para mensagens aleatórias
-	size_t size = Dstream->getMessageSize();
-	if (!Dstream->read(buffer, size)) 
+void Interface<T>::WriteInOutputFile() 
+{
+	int nblocks = used / ChunkList<T>::N;
+	int extra = used % ChunkList<T>::N;
+	ChunkList<T>* current = firstBlock;
+	entity<T> tofile;
+
+	for (int i = 0;i < nblocks;i++) 
 	{
-		std::cerr << "FALHA NA LEITURA DO SERIAL || TAMANHO DA MENSAGEM:" << size << std::endl;
-		std::cerr << "WINDOWS LASTERROR: " << GetLastError() << std::endl;
-		return false;
+		if (!current) {
+
+			return;
+		}
+		for (int j = 0;j < ChunkList<T>::N;j++) 
+		{
+			if (refValidation(&current->Data[j])) 
+			{
+				filestream->WriteInFile(&current->Data[j], sizeof(entity<T>));
+			}
+			else 
+			{
+				tofile = current->Data[j];
+				tofile.id = -tofile.id;
+				filestream->WriteInFile(&tofile, sizeof(entity<T>));
+			}
+		}
+		current = current->Next;
+	}
+
+	for (int i = 0;i < extra; i++) 
+	{
+		if (refValidation(&current->Data[i]))
+		{
+			filestream->WriteInFile(&current->Data[i], sizeof(entity<T>));
+		}
+		else
+		{
+			tofile = current->Data[i];
+			tofile.id = -tofile.id;
+			filestream->WriteInFile(&tofile, sizeof(entity<T>));
+		}
 
 	}
-	memcpy(pointer, buffer, size);
+
 
 }
 
-template<typename T>
-void Interface<T>::setSerialMessageSize(size_t size) 
+template <typename T>
+void Interface<T>::restoreBin(int bins) 
 {
-	Dstream->setMessageSize(size);
-}
+	
+	if (bins >= maxTrashBin) { bins = maxTrashBin; }
+	if (!binOverflow && trashBinCount == 0) {
+		return;//não há lixeira a ser restaurada
+	}
+	if (!binOverflow && bins > trashBinCount) { bins = trashBinCount; }
 
+	int localecount = trashBinCount-1;
+	for (int i = 0;i < bins;i++) 
+	{
+		insertData(trashArray[localecount].Data.id, trashArray[localecount].Data.data);
+		localecount--;
+		if (localecount == -1) {
+			localecount = maxTrashBin - 1;
+		}
+	}
+
+
+}
 template<typename T>
-size_t Interface<T>::getSerialMessageSize() 
+void Interface<T>::commitInOutFile(std::string newInputFile) 
 {
-	return (Dstream->getMessageSize());
+	filestream->Commit(newInputFile);
 }
 
-*/
 #endif // !

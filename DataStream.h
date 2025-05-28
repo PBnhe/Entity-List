@@ -30,11 +30,11 @@ class DataStream
 private:
 	HANDLE serial_handle=0;
 
-	size_t message_size = 0;
+	/*size_t message_size = 0;
 	size_t writeMessage_size=0;
 
 	std::byte* read_buffer = nullptr;
-	std::byte* write_buffer = nullptr;
+	std::byte* write_buffer = nullptr;*/
 
 	std::unordered_map<uint8_t, size_t> Op_size;
 	std::unordered_map < uint8_t, std::function<void(uint8_t OPCODE, std::byte* PAYLOAD, uint8_t checkSum,void* any)>> OP_FUNCTION;
@@ -46,7 +46,7 @@ private:
 	bool sinc = true;
 
 public:
-	bool open(std::string & port,DWORD accessType, DWORD baudrate = CBR_115200);//configura e abre a porta serial para comunica��o via usb
+	bool open(std::string  port,DWORD accessType, DWORD baudrate = CBR_115200);//configura e abre a porta serial para comunica��o via usb
 	void messageTreatment();
 	uint8_t generateCheksum(uint8_t opcode, uint8_t* payload, size_t size);
 
@@ -75,7 +75,7 @@ void MapOPCODE(uint8_t opcode, size_t size,std::function<void(uint8_t OPOCDE,std
 };
 
 
-bool DataStream::open(std::string& port, DWORD accessType, DWORD baudrate)
+bool DataStream::open(std::string port, DWORD accessType, DWORD baudrate)
 {
 	std::string fullPort = "\\\\.\\";
 	fullPort += port;
@@ -94,6 +94,7 @@ bool DataStream::open(std::string& port, DWORD accessType, DWORD baudrate)
 	{
 		std::cout << "FALSE 1" << std::endl;
 		std::cout <<"ERRO: "<< GetLastError() << std::endl;
+		//throw std::runtime_error("Falha em abrir PORTA serial");
 		return false;
 	}
 
@@ -126,10 +127,10 @@ bool DataStream::open(std::string& port, DWORD accessType, DWORD baudrate)
 		return false;
 	}
 	std::cout << "TRUE" << std::endl;
-	read_buffer = new std::byte[64];
+	/*read_buffer = new std::byte[64];
 	message_size = 64;
 	write_buffer = new std::byte[64];
-	writeMessage_size =64;
+	writeMessage_size =64;*/
 	
 	return true;
 }
@@ -293,7 +294,7 @@ if (status.cbInQue < 2)
 	uint8_t checksum;
 	if (sinc)
 	{
-		std::cerr << "sinc" << std::endl;
+		//std::cerr << "sinc" << std::endl;
 		if (!read(&opcode, payload, &checksum)) {
 			std::cerr << "FailtoRead" << std::endl;
 			return;
@@ -411,7 +412,7 @@ bool DataStream::ressinc()
 
 	}
 //last check
-	PurgeComm(serial_handle, PURGE_RXCLEAR);
+	//PurgeComm(serial_handle, PURGE_RXCLEAR);
 	package<uint8_t> sendOK;
 	sendOK.OPCODE = OP_SEND_OK;
 	sendOK.payload = 0x00;

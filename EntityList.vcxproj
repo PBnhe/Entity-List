@@ -133,12 +133,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="FileStream.cpp" />
     <ClCompile Include="hashTable.h" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="ThreadPool.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="ChunkListT.h" />
+    <ClInclude Include="Filestream.h" />
     <ClInclude Include="Interface.h" />
     <ClInclude Include="DataStream.h" />
     <ClInclude Include="ThreadPool.h" />
