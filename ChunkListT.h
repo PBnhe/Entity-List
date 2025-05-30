@@ -24,9 +24,6 @@ class ChunkList
 {
 private:
 
-
-
-
 public:
 	entity<T>* Data = nullptr; //ponteiro para vetor de entidade genérica
 	ChunkList<T>* Next = nullptr;//ponteiro para próximo item da estrutura 
@@ -38,7 +35,6 @@ public:
 	static int N;   //inteiro que define os N elementos do vetor de dados 
 	static int BLOCKS_N;
 	
-
 };
 
 

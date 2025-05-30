@@ -49,7 +49,6 @@ private:
 	hashTable<T>* deletano = nullptr;  //hash table personalizada
 	std::unordered_map<int, T> readBuffer; //cache de leitura rápida
 
-	std::function<bool(entity<T>)> reValidateTrash; //função a ser definida que opera sob bloco de lixo
 	bool hasExtraVal = false;
 	short int trashBinCount = 0;
 	short int maxTrashBin = 0;
@@ -57,9 +56,7 @@ private:
 
 	ThreadPool threads;
 	FileStream* filestream = nullptr;
-	//DataStream<T> * Dstream=nullptr;
 	
-
 	// esses métodos são usados para  modificar todos os valores do vetor sem volta 
 	//caso deseje apenas modificar um valor ou certos valores faça questao de aplicar filtros
 	//ou utilize outros métodos  de escrita por ID para tal(reWriteByID) 
@@ -94,7 +91,7 @@ public:
 			blocksCount = ChunkList<T>::BLOCKS_N;
 			deletano = new hashTable<T>();
 			buffer = new hashTable<T>();
-			trashArray = new ChunkList<T>[ChunkList<T>::N];
+			trashArray = new ChunkList<T>[config.maxTrashBins];
 
 			for (int i = 0; i < config.maxTrashBins; i++)
 			{
@@ -109,7 +106,6 @@ public:
 	}
 	~Interface();
 	
-
 	void ShowDataDebug() { firstBlock->ShowDataDebug(); }
 
 	void insertData(int id, T data);//associa dados a um id na lista de entidades
@@ -118,7 +114,7 @@ public:
 	void trashControl(); // remanejo de lixo
 	void dataD(); //método existe apenas para debug
 	
-	entity<T> returnCopyByIndex(int index);//debug
+	entity<T> returnCopyByIndex(int index);
 
 	
 	T returnDataByID(int id);
@@ -259,14 +255,12 @@ void Interface<T>::insertData(int id, T data)
 		return;
 	}
 
-	
 	//sendo assim vamos atualizar a memória disponivel , essa que deve estar estritamente ZERADA para chegar aqui
 
 	AllocNewAndInsert(data, id);
 	used++;
 	blocksCount++;
 	return;
-
 
 
 }
@@ -1160,7 +1154,7 @@ void Interface<T>::DoScalar_internal(int F_id, std::vector<ChunkList<T>*> vector
 		}
 	}
 	threadcount.fetch_sub(1, std::memory_order_acq_rel);
-
+		
 }
 
 
