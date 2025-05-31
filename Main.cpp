@@ -15,13 +15,7 @@ struct onOFFsensor {
 
 };
 
-struct safevec 
-{
-	std::vector<entity<int>*> todelete;
-	std::mutex mu;
-	Interface<int>* interf=nullptr;
-	int counter = 0;
-};
+
 void readTemperature(float& value, int& id, entity<float>* ref, void* extra) {
 	//cout << "DEBEUG: " << adcValue << endl;
 	int adcValue = value;
@@ -47,31 +41,7 @@ void readTemperature(float& value, int& id, entity<float>* ref, void* extra) {
 	value= temperatureC;
 }
 
-void heavyIntOp(int & value,int &id,entity<int> * ref,void* extra) 
-{
-	auto safev = reinterpret_cast<safevec*>(extra);
-	int result = 0;
-	int n = std::abs(value);
-	for (int i = 2; i * i <= n; ++i) {
-		while (n % i == 0) {
-			result += i;
-			n /= i;
-		}
-	}
-	if (n > 1) result += n;
-	value = result;
-	
-	/*if (value > 1000)
-	{
-		std::unique_lock<std::mutex> lock(safev->mu);
-			//buffer->push_back(ref);
-		safev->interf->removeDataIn(ref);
-		safev->interf->trashControl();
-		safev->counter++;
-	}
-	*/
-   
-}
+
 void MessageToList(uint8_t OPCODE, std::byte* PAYLOAD, uint8_t checkSum, void* any) 
 {
 Interface<float>* entitylist = reinterpret_cast<Interface<float>*> (any);
@@ -100,12 +70,11 @@ int main()
 	dstream.open("COM6", GENERIC_READ | GENERIC_WRITE,1000000);
 	
 	Interface<float>* entitylist=nullptr;
+
 	entitylist = new Interface<float>();
 	uint8_t op = 0x04;
 	dstream.MapOPCODE(op, 8, MessageToList, entitylist);
-
 	
-
 
 	
 	entitylist->insertScalarFunction(1, readTemperature);
@@ -123,12 +92,11 @@ int main()
 	cout << "Pass" << endl;
 	  
 	
-	//entitylist->insertScalarFunction(1, heavyIntOp);
+	
 	cout << "APERTE QUALQUER TECLA PARA CONTINUAR" << endl;
 	system("Pause");
 	entitylist->createInOutFiles("Inpute", "Ortepute");
 
-	cout << "pronto :(" << endl;
 	while (true) 
 	{
 		int cas0 = 0;
@@ -138,7 +106,7 @@ int main()
 		cout << "3:: APLICAR METODO" << endl;
 		cout << "4:: DADOS DA LISTA" << endl;
 		cout << "5:: CONTROLAR SENSOR" << endl;
-		cout << "6::COLETA DADOS POR 20 SEGUNDOS" << std::endl;
+		cout << "6::COLETA DADOS POR 10 SEGUNDOS" << std::endl;
 		cout << "7::LIMPAR CONTADOR DE ID DA PLACA" << std::endl;
 		cout << "8:: ESCREVA" << std::endl;
 		cout << "9::LEIA INPUTFILE " << std::endl;
@@ -162,6 +130,7 @@ int main()
 		case 3: 
 		{
 			cin.clear();
+			cin.ignore(1000000, '\n');
 			int ide = 0;
 			cout << "INSIRA ID DO METODO" << endl;
 			cin >> ide;
@@ -173,6 +142,7 @@ int main()
 			cout<<"MEM DISPO: "<<entitylist->available()<<endl;
 			cout << "MEM USADA: "<<entitylist->memUsed()<<endl;
 			entitylist->dataD();
+			cin.clear();
 			break;
 
 		}
@@ -197,7 +167,7 @@ int main()
 			dstream.write(&message, sizeof(onOFFsensor));
 			auto start = high_resolution_clock::now();
 			auto end = high_resolution_clock::now();
-			while (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() < 20000.0f) 
+			while (std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count() < 10000.0f) 
 			{
 				dstream.messageTreatment();
 				end = high_resolution_clock::now();

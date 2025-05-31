@@ -1068,6 +1068,7 @@ void Interface<T>::returncpyID_internal(int id, std::vector<ChunkList<T>*> vecto
 template<typename T>
 void Interface<T>::DoScalar(int id,void* extra)
 {//o método deve separar a carga de trabalho entre várias threads de acordo com o numero de threads
+	readBuffer.clear();
 	int n_threads = ThreadPool::N_threads;
 	//agora que temos o numero de threads vamos calcular quantos blocos cada uma vai iterar sobre
 	int nblock = used / ChunkList<T>::N;
@@ -1492,7 +1493,7 @@ void Interface<T>::restoreBin(int bins)
 	int localecount = trashBinCount-1;
 	for (int i = 0;i < bins;i++) 
 	{
-		insertData(trashArray[localecount].Data.id, trashArray[localecount].Data.data);
+		insertData(trashArray[localecount].Data[i].id, trashArray[localecount].Data[i].data);
 		localecount--;
 		if (localecount == -1) {
 			localecount = maxTrashBin - 1;
